@@ -1,115 +1,238 @@
 #!/usr/bin/env python3
-"""Draw the 21 November 2026 world-news summary image (1024x1024 PNG).
+"""The World in One Day — Saturday 21 November 2026.
 
-Every story below was reported on 21 November 2026. The picture is drawn,
-not photographed: flat shapes and big type that stay legible when the
-judge sees the image small. Run: python3 draw.py -> writes entry.png.
-Layout is measured: each block asserts it fits its box before drawing.
+One 1024x1024 picture that sums up the day's world news, drawn with
+Pillow from flat shapes and type. Twenty-eight stories are named below
+— one lead, eight cards and nineteen one-line briefs — and every one
+was reported on 21 November 2026; nothing here is photographed and
+nothing is AI-generated. The layout is checked as it draws: each text
+block asserts it fits its box, so a too-long headline fails loudly
+instead of spilling over the edge.
+
+Run:  python3 draw.py        -> writes entry.png next to this file.
 """
 from PIL import Image, ImageDraw, ImageFont
 
-W = 1024
-PAPER = (247, 243, 234)
-NAVY = (13, 32, 64)
-INK = (24, 28, 38)
-GOLD = (232, 178, 60)
-RED = (178, 34, 52)
+SIZE = 1024
+MARGIN = 44
+GUTTER = 16
+
+PAPER = (246, 241, 231)     # warm newsprint
+NAVY = (15, 34, 66)         # masthead / lead / footer
+INK = (22, 26, 36)          # body headlines
+SLATE = (98, 106, 120)      # decks and captions
+CARD_BG = (255, 255, 255)
+CARD_RULE = (214, 208, 194)
+GOLD = (217, 164, 65)
+CRIMSON = (176, 42, 60)
+PALE = (196, 210, 232)      # light text on navy
 WHITE = (255, 255, 255)
-CARD = (255, 255, 255)
-GREY = (96, 104, 118)
-LEAD_SUB = (196, 210, 232)
 
-BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+REG_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
 
-def font(path, size):
+def load_font(path, size):
     return ImageFont.truetype(path, size)
 
 
-def wrap(draw, text, fnt, width):
-    lines, cur = [], ""
+def wrap_text(draw, text, font, max_width):
+    """Greedy word wrap; returns a list of lines that fit max_width."""
+    lines = []
+    current = ""
     for word in text.split():
-        trial = word if not cur else cur + " " + word
-        if draw.textlength(trial, font=fnt) <= width:
-            cur = trial
+        trial = word if not current else current + " " + word
+        if draw.textlength(trial, font=font) <= max_width:
+            current = trial
         else:
-            lines.append(cur)
-            cur = word
-    if cur:
-        lines.append(cur)
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
 
-def block(draw, xy, text, fnt, fill, width, leading, max_lines):
-    """Draw wrapped text; assert it fits the line budget, return end y."""
+def draw_wrapped(draw, xy, text, font, fill, max_width, leading, max_lines):
+    """Draw wrapped text inside a box; assert it fits; return bottom y."""
     x, y = xy
-    lines = wrap(draw, text, fnt, width)
-    assert len(lines) <= max_lines, f"overflow ({len(lines)} lines): {text[:40]}"
+    lines = wrap_text(draw, text, font, max_width)
+    assert len(lines) <= max_lines, f"text overflows ({len(lines)} lines): {text[:48]!r}"
     for line in lines:
-        draw.text((x, y), line, font=fnt, fill=fill)
+        draw.text((x, y), line, font=font, fill=fill)
         y += leading
     return y
 
 
-img = Image.new("RGB", (W, W), PAPER)
-d = ImageDraw.Draw(img)
+# ---- the day's stories -------------------------------------------------
+LEAD = {
+    "kicker": "KYIV & WARSAW  •  WAR IN EUROPE",
+    "headline": "Russia's Biggest Barrage Yet — Missiles Land in Poland",
+    "deck": "400+ drones and 110 missiles hit Ukraine; two missiles and a "
+            "suspected drone come down in Poland. PM Tusk calls it a "
+            "deliberate provocation.",
+}
 
-# ---- header: the day, named big ------------------------------------------
-d.rectangle([0, 0, W, 158], fill=NAVY)
-d.rectangle([0, 158, W, 166], fill=GOLD)
-d.text((44, 22), "THE WORLD IN ONE DAY", font=font(BOLD, 29), fill=GOLD)
-d.text((44, 56), "SATURDAY 21 NOVEMBER 2026", font=font(BOLD, 54), fill=WHITE)
-d.text((44, 124), "The day's biggest stories, in one picture", font=font(REG, 23), fill=(178, 196, 224))
-
-# ---- lead story: Russia's barrage, missiles land in Poland ----------------
-d.rounded_rectangle([36, 182, 988, 390], radius=18, fill=NAVY)
-d.rectangle([36, 182, 52, 390], fill=RED)
-d.text((76, 200), "KYIV & WARSAW  •  WAR IN EUROPE", font=font(BOLD, 24), fill=GOLD)
-y = block(d, (76, 230), "Russia's Biggest Barrage Yet — Missiles Land in Poland",
-          font(BOLD, 39), WHITE, 876, 47, 2)
-block(d, (76, y + 8), "400+ drones and 110 missiles hit Ukraine; two missiles and a suspected drone come down in Poland. PM Tusk calls it a deliberate provocation.",
-      font(REG, 22), LEAD_SUB, 876, 29, 2)
-
-# ---- story cards: two columns, three rows ----------------------------------
-CARDS = [
-    ("NEW YORK  •  MARKETS", RED,
-     "AI Sell-Off Drags S&P 500 Into Correction",
-     "Nasdaq falls 5.28%; Nvidia drops about 14%."),
-    ("THE HAGUE", (0, 110, 110),
-     "World Court: Myanmar Guilty of Rohingya Genocide",
-     "The ICJ finds Myanmar responsible for genocide."),
-    ("ANTALYA, TURKEY", (24, 122, 62),
-     "COP31 Talks Run Past Deadline on Fossil Fuels",
-     "Nearly 200 nations fail to agree; summit goes into overtime."),
-    ("WASHINGTON", (104, 60, 160),
-     "FBI Crime Database Hacked",
-     "Nationwide law-enforcement database breached; US outages continue."),
-    ("LONDON  •  HEALTH", (150, 40, 90),
-     "Cancer Pill Makes Tumours Undetectable in 1 in 12",
-     "Daraxonrasib trial brings hope for pancreatic cancer."),
-    ("THE ANDES, PERU", (140, 100, 20),
-     "Magnitude 6.8 Quake Shakes the Peruvian Andes",
-     "Tremors felt in Lima, 320 km from the epicentre."),
+STORIES = [
+    {
+        "kicker": "NEW YORK  •  MARKETS",
+        "accent": CRIMSON,
+        "headline": "AI Sell-Off Drags S&P 500 Into Correction",
+        "deck": "Nasdaq falls 5.28%; Nvidia drops about 14%.",
+    },
+    {
+        "kicker": "THE HAGUE",
+        "accent": (0, 108, 108),
+        "headline": "World Court: Myanmar Guilty of Rohingya Genocide",
+        "deck": "The ICJ finds Myanmar responsible for genocide.",
+    },
+    {
+        "kicker": "ANTALYA, TURKEY",
+        "accent": (26, 120, 60),
+        "headline": "COP31 Talks Run Past Deadline on Fossil Fuels",
+        "deck": "Nearly 200 nations fail to agree; summit in overtime.",
+    },
+    {
+        "kicker": "WASHINGTON",
+        "accent": (104, 60, 160),
+        "headline": "FBI Crime Database Hacked",
+        "deck": "Law-enforcement database breached; outages continue.",
+    },
+    {
+        "kicker": "LONDON  •  HEALTH",
+        "accent": (150, 40, 90),
+        "headline": "Cancer Pill Makes Tumours Undetectable in 1 in 12",
+        "deck": "Daraxonrasib trial brings hope for pancreatic cancer.",
+    },
+    {
+        "kicker": "THE ANDES, PERU",
+        "accent": (140, 100, 20),
+        "headline": "Magnitude 6.8 Quake Shakes the Peruvian Andes",
+        "deck": "Tremors felt in Lima, 320 km from the epicentre.",
+    },
+    {
+        "kicker": "SAN FRANCISCO  •  SCIENCE",
+        "accent": (30, 90, 170),
+        "headline": "Anthropic: Claude Solved Maths' Greatest Riddle",
+        "deck": "Riemann riddle stood 160 years; experts check proof.",
+    },
+    {
+        "kicker": "TEHRAN  •  DIPLOMACY",
+        "accent": (170, 90, 20),
+        "headline": "Iran Seeks Diplomacy; Trump Rejects Its Terms",
+        "deck": "Tehran seeks talks; Trump weighs new strikes.",
+    },
 ]
 
-x0, y0, cw, ch, gap = 36, 406, 466, 150, 16
-for i, (kicker, colour, head, sub) in enumerate(CARDS):
-    cx = x0 + (i % 2) * (cw + gap)
-    cy = y0 + (i // 2) * (ch + gap)
-    d.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=14, fill=CARD, outline=(216, 210, 196), width=2)
-    d.rectangle([cx, cy, cx + cw, cy + 9], fill=colour)
-    d.text((cx + 22, cy + 18), kicker, font=font(BOLD, 19), fill=colour)
-    y = block(d, (cx + 22, cy + 42), head, font(BOLD, 25), INK, cw - 44, 29, 2)
-    block(d, (cx + 22, cy + 96), sub, font(REG, 19), GREY, cw - 44, 22, 2)
+# One-line briefs for the footer band: (place, headline).
+BRIEFS = [
+    ("SHENZHEN", "Trump hails summit with Xi, Putin"),
+    ("BRUSSELS", "UK and EU sign biggest post-Brexit deals"),
+    ("BERLIN", "Gen Z protests sweep 25 countries"),
+    ("NEW YORK", "Mamdani sets 2032 to close Rikers Island"),
+    ("GENEVA", "Nations open path to a 'killer robots' pact"),
+    ("WASHINGTON", "Trump ousts cyber chief over outages"),
+    ("TOYOTA CITY", "Honda, Toyota recall 1.6m vehicles"),
+    ("TOKYO", "Japan core inflation rises to 2.2% in October"),
+    ("LOS ANGELES", "Man convicted in deadly Palisades fire"),
+    ("HAITI", "Salvadoran soldiers killed by explosives"),
+    ("GAZA", "Israeli strikes kill more Palestinians"),
+    ("PARIS", "Senate approves 'licence to kill' police law"),
+    ("TALLINN", "Estonia to shut Russia border crossings Dec 1"),
+    ("MADRID", "Spain votes Nov 29 as conservatives gain"),
+    ("NEW DELHI", "Pakistan minister in India for SCO dialogue"),
+    ("MUNICH", "Kane out for months with torn ankle ligament"),
+    ("LAS VEGAS", "Russell on pole for Las Vegas Grand Prix"),
+    ("TURIN", "Alcaraz unbeaten into ATP Finals semi-finals"),
+    ("WELLINGTON", "Rahul ton puts India in charge vs NZ"),
+]
 
-# ---- footer: also today ------------------------------------------------------
-fy = y0 + 3 * ch + 2 * gap + 16
-d.rectangle([0, fy, W, W], fill=NAVY)
-d.text((44, fy + 14), "ALSO TODAY", font=font(BOLD, 21), fill=GOLD)
-block(d, (44, fy + 44),
-      "Trump hails Shenzhen summit as unprecedented  •  UK and EU sign biggest post-Brexit deals  •  Gen Z protests sweep 25 countries  •  Mamdani sets 2032 to close Rikers Island",
-      font(REG, 21), WHITE, 936, 27, 2)
+assert 1 + len(STORIES) + len(BRIEFS) == 28, "the edition must hold 28 stories"
 
-img.save("entry.png", optimize=True)
-print("wrote entry.png", img.size)
+
+def draw_masthead(draw):
+    """Navy band, gold rule, title, date and tagline."""
+    draw.rectangle([0, 0, SIZE, 132], fill=NAVY)
+    draw.rectangle([0, 132, SIZE, 138], fill=GOLD)
+    draw.text((MARGIN, 14), "THE WORLD IN ONE DAY",
+              font=load_font(BOLD_PATH, 24), fill=GOLD)
+    draw.text((MARGIN, 40), "SATURDAY 21 NOVEMBER 2026",
+              font=load_font(BOLD_PATH, 46), fill=WHITE)
+    draw.text((MARGIN, 100), "The day's biggest stories, in one picture — 28 reports",
+              font=load_font(REG_PATH, 19), fill=PALE)
+
+
+def draw_lead(draw):
+    """The big navy panel for the day's top story."""
+    top, bottom = 146, 330
+    draw.rounded_rectangle([36, top, 988, bottom], radius=18, fill=NAVY)
+    draw.rectangle([36, top, 52, bottom], fill=CRIMSON)
+    draw.text((72, 160), LEAD["kicker"],
+              font=load_font(BOLD_PATH, 19), fill=GOLD)
+    draw.rectangle([72, 186, 172, 190], fill=GOLD)
+    end_y = draw_wrapped(draw, (72, 198), LEAD["headline"],
+                         load_font(BOLD_PATH, 32), WHITE, 880, 39, 2)
+    draw_wrapped(draw, (72, end_y + 8), LEAD["deck"],
+                 load_font(REG_PATH, 18), PALE, 880, 23, 2)
+
+
+def draw_card(draw, box, index, story):
+    """One white story card: numbered, accent strip, kicker, headline, deck."""
+    x, y, w, h = box
+    draw.rounded_rectangle([x, y, x + w, y + h], radius=12,
+                           fill=CARD_BG, outline=CARD_RULE, width=2)
+    draw.rectangle([x, y, x + w, y + 6], fill=story["accent"])
+    draw.text((x + 20, y + 12), f"{index:02d}  •  {story['kicker']}",
+              font=load_font(BOLD_PATH, 14), fill=story["accent"])
+    draw_wrapped(draw, (x + 20, y + 30), story["headline"],
+                 load_font(BOLD_PATH, 20), INK, w - 40, 23, 2)
+    draw_wrapped(draw, (x + 20, y + 76), story["deck"],
+                 load_font(REG_PATH, 14), SLATE, w - 40, 17, 1)
+
+
+def draw_grid(draw):
+    """Two columns, four rows of story cards."""
+    card_w, card_h = 466, 98
+    x0, y0 = 36, 344
+    for i, story in enumerate(STORIES):
+        cx = x0 + (i % 2) * (card_w + GUTTER)
+        cy = y0 + (i // 2) * (card_h + 12)
+        draw_card(draw, (cx, cy, card_w, card_h), i + 1, story)
+    return y0 + 4 * card_h + 3 * 12
+
+
+def draw_briefs(draw, top):
+    """Navy strip: the rest of the day as two columns of one-line briefs."""
+    draw.rectangle([0, top, SIZE, SIZE], fill=NAVY)
+    draw.text((MARGIN, top + 12), "ALSO TODAY — IN BRIEF",
+              font=load_font(BOLD_PATH, 17), fill=GOLD)
+    place_font = load_font(BOLD_PATH, 15)
+    text_font = load_font(REG_PATH, 15)
+    col_x = (MARGIN, 528)
+    col_w = 452
+    rows_y = top + 42
+    half = (len(BRIEFS) + 1) // 2
+    for col, chunk in enumerate((BRIEFS[:half], BRIEFS[half:])):
+        for row, (place, headline) in enumerate(chunk):
+            y = rows_y + row * 18.5
+            label = place + "  —  "
+            draw.text((col_x[col], y), label, font=place_font, fill=GOLD)
+            label_w = draw.textlength(label, font=place_font)
+            draw.text((col_x[col] + label_w, y), headline,
+                      font=text_font, fill=WHITE)
+            total = label_w + draw.textlength(headline, font=text_font)
+            assert total <= col_w, f"brief overflows: {place} {headline!r}"
+
+
+def main():
+    img = Image.new("RGB", (SIZE, SIZE), PAPER)
+    draw = ImageDraw.Draw(img)
+    draw_masthead(draw)
+    draw_lead(draw)
+    grid_bottom = draw_grid(draw)
+    draw_briefs(draw, grid_bottom + 16)
+    img.save("entry.png", optimize=True)
+    print("wrote entry.png", img.size)
+
+
+if __name__ == "__main__":
+    main()
